@@ -1,0 +1,436 @@
+{
+  "name": "Clima Brasil — Telegram e OpenWeather",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "0bddc636-06bd-4032-8437-a2f7b43ec78a",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        16
+      ],
+      "webhookId": "b18de0d4-cbb2-4683-93b9-d79180848ba7",
+      "notes": "Recebe mensagens. O próximo IF ignora áudio, fotos e mensagens sem texto."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c5c3a05f-9cd6-4258-8454-cdcd43a154b4",
+              "leftValue": "={{ typeof $json.message?.text === 'string' && $json.message.text.trim().length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c103c067-5d11-4060-82d9-eea34617edcc",
+      "name": "Mensagem de texto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bdbc8eef-aaee-47a7-8c29-603d5b6dd26b",
+              "name": "queue",
+              "value": "={{ (() => { const parts = $json.message.text.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().trim().split(',').map(p => p.trim().replace(/\\s+/g, ' ')); if (parts.length === 2) parts.push('br'); return parts.join(','); })() }}",
+              "type": "string"
+            },
+            {
+              "id": "83d098f9-455b-42ab-9cfe-3f93064afdc5",
+              "name": "chatId",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f10504d8-1466-4fec-89a2-11d9a7cb1bb4",
+      "name": "Preparar entrada",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "48aee797-a3b1-40e7-afde-4683cc9e46a3",
+              "leftValue": "={{ /^[a-z][a-z .’'\\-]{0,119},(ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to),br$/.test($json.queue) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ddcbc37e-0c0e-4837-9219-bbfdfc3e3f5c",
+      "name": "Entrada válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        656,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openweathermap.org/data/2.5/weather",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.queue }}"
+            },
+            {
+              "name": "units",
+              "value": "metric"
+            },
+            {
+              "name": "lang",
+              "value": "pt_br"
+            },
+            {
+              "name": "appid",
+              "value": "={{ $env.OPENWEATHER_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "349a26f5-71ee-47be-b2f1-1d7f58abe49a",
+      "name": "Consultar OpenWeather",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        -96
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "queue é a variável interna. q é o parâmetro correto da API. Respostas HTTP de erro e falhas de transporte seguem para tratamento."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7b485520-18b1-4a2c-8701-d396c82dceed",
+              "leftValue": "={{ Number($json.statusCode) === 200 && Number($json.body?.cod) === 200 && typeof $json.body?.main?.temp === 'number' && Number.isFinite($json.body.main.temp) && typeof $json.body?.name === 'string' && $json.body.name.trim().length > 0 && $json.body?.sys?.country === 'BR' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "38a03c99-9912-43cc-969d-0b5881962dc1",
+      "name": "Resposta válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1d459551-65e7-4d0d-abce-1c166d1e2eb6",
+              "name": "message",
+              "value": "={{ '🌤️ A temperatura em ' + $json.body.name + ' é de ' + Math.round($json.body.main.temp) + '°C.' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2308a0a6-1d09-48d3-96ad-6ce657824223",
+      "name": "Formatar temperatura",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1328,
+        -224
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Preparar entrada').first().json.chatId }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "065d4ce1-e680-4fc2-b446-75fc7e2919b3",
+      "name": "Enviar temperatura",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1536,
+        -224
+      ],
+      "webhookId": "4823a34b-3bce-47ad-bdab-44bc48c05336",
+      "notes": "Selecione a mesma credencial Telegram API utilizada no Telegram Trigger."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4cf60166-18fc-4e86-a083-25b665bbbdc1",
+              "leftValue": "={{ Number($json.statusCode) === 404 || Number($json.statusCode) === 200 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ecdba533-3975-4d97-b0a8-da14dc517839",
+      "name": "Cidade ausente ou dados inválidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1328,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Preparar entrada').first().json.chatId }}",
+        "text": "❌ Cidade não encontrada. Use o formato Cidade,UF,BR (ex.: São Paulo,SP,BR).",
+        "replyMarkup": "none",
+        "forceReply": {},
+        "replyKeyboardOptions": {},
+        "replyKeyboardRemove": {},
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "5c2744c3-1439-44b7-9849-a4d28242bb91",
+      "name": "Enviar erro de cidade",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1536,
+        96
+      ],
+      "webhookId": "6f629182-594e-48f4-8832-ee6e10b913fb",
+      "notes": "Selecione a mesma credencial Telegram API utilizada no Telegram Trigger."
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Preparar entrada').first().json.chatId }}",
+        "text": "⚠️ Não consegui consultar o clima agora. Tente novamente em alguns instantes.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "047fbd88-e5f1-41d4-96b7-6a50f35a3a91",
+      "name": "Enviar erro do serviço",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1536,
+        304
+      ],
+      "webhookId": "ecb672bb-ea91-4470-b8d8-7c08e8cc284a",
+      "notes": "Selecione a mesma credencial Telegram API utilizada no Telegram Trigger."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Mensagem de texto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensagem de texto?": {
+      "main": [
+        [
+          {
+            "node": "Preparar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar entrada": {
+      "main": [
+        [
+          {
+            "node": "Entrada válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada válida?": {
+      "main": [
+        [
+          {
+            "node": "Consultar OpenWeather",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar erro de cidade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar OpenWeather": {
+      "main": [
+        [
+          {
+            "node": "Resposta válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resposta válida?": {
+      "main": [
+        [
+          {
+            "node": "Formatar temperatura",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cidade ausente ou dados inválidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar temperatura": {
+      "main": [
+        [
+          {
+            "node": "Enviar temperatura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cidade ausente ou dados inválidos?": {
+      "main": [
+        [
+          {
+            "node": "Enviar erro de cidade",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar erro do serviço",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}
